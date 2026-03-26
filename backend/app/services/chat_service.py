@@ -211,6 +211,15 @@ class ChatService:
             for table, spec in schemas.items()
             if isinstance(spec, dict)
         }
+        known_columns: list[str] = []
+        for cols in table_columns.values():
+            for col in cols:
+                if col and col not in known_columns:
+                    known_columns.append(col)
+                if len(known_columns) >= 80:
+                    break
+            if len(known_columns) >= 80:
+                break
         accepted = metadata.get("relationships", {}).get("accepted", [])[:40]
         compact_relationships = [
             {
@@ -230,10 +239,10 @@ class ChatService:
                 "Domain: uploaded Order-to-Cash dataset only.",
                 "Graph model uses (n:GraphNode) and [r:GRAPH_EDGE].",
                 "Node fields: id, label, entity, data (JSON string).",
-                "Never use dynamic labels such as (:billing_document_headers); always use (:GraphNode).",
+                "Never use dynamic table labels; always use (:GraphNode).",
                 "Filter table/entity via n.entity = '<table_name>'.",
                 "Row-level columns live inside n.data JSON string.",
-                "For column equality (example billingDocument=90504289), filter using a regex on n.data that allows optional spaces and optional quotes around the value.",
+                "For column equality lookups, filter using a regex on n.data that allows optional spaces and optional quotes around the value.",
                 "Edge fields: id, label, relationship_type, score, columns, edge_type.",
                 "Only read-only query allowed.",
                 "Always include LIMIT <= 50.",
@@ -241,12 +250,19 @@ class ChatService:
                 "Prefer RETURN projections: n.id AS id, n.label AS label, n.entity AS entity, n.data AS data.",
                 "Output JSON only.",
             ],
+            "intent_guidance": [
+                "If the user asks details for a field-value lookup, build regex on n.data for that exact field and value.",
+                "If user asks for links/relationships around a field-value lookup, include OPTIONAL MATCH (n)-[r:GRAPH_EDGE]-(m:GraphNode) and return linked node/edge columns.",
+                "Prefer fields from known_columns and tables from tables when possible.",
+                "For regex on n.data, ensure full-string match works by including leading and trailing .* around the key/value pattern.",
+            ],
             "selected_node_id": selected_node_id,
             "question": question,
             "conversation_history": history,
             "dataset_context": dataset_context,
             "tables": tables,
             "table_columns": table_columns,
+            "known_columns": known_columns,
             "relationships": compact_relationships,
             "response_schema": {
                 "cypher": "string",
@@ -324,12 +340,29 @@ class ChatService:
             )
             answer = (completion.choices[0].message.content or "").strip()
             if answer:
+                low = answer.lower()
+                has_no_match_claim = any(
+                    token in low
+                    for token in (
+                        "no matching",
+                        "no records",
+                        "not found",
+                        "no result",
+                    )
+                )
+                if rows and has_no_match_claim:
+                    return self._deterministic_rows_summary(rows)
+                if not rows and not has_no_match_claim:
+                    return "No matching records were found for this question in the current dataset graph."
                 return answer
         except Exception:
             pass
 
         if not rows:
             return "No matching records were found for this question in the current dataset graph."
+        return self._deterministic_rows_summary(rows)
+
+    def _deterministic_rows_summary(self, rows: list[dict[str, Any]]) -> str:
         preview = rows[:3]
         return f"Found {len(rows)} matching records. Sample: {json.dumps(preview, ensure_ascii=True)}"
 
