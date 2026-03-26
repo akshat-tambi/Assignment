@@ -24,7 +24,10 @@ mkdir -p "${MYSQL_DATA_DIR}" /run/mysqld
 chown -R mysql:mysql "${MYSQL_DATA_DIR}" /run/mysqld
 
 if [[ ! -d "${MYSQL_DATA_DIR}/mysql" ]]; then
-  mariadb-install-db --user=mysql --datadir="${MYSQL_DATA_DIR}" >/tmp/mariadb-install.log
+  mariadb-install-db \
+    --user=mysql \
+    --datadir="${MYSQL_DATA_DIR}" \
+    --auth-root-authentication-method=normal >/tmp/mariadb-install.log
 fi
 
 mariadbd \
@@ -45,7 +48,7 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 for i in {1..60}; do
-  if mariadb-admin --socket=/run/mysqld/mysqld.sock ping --silent; then
+  if mariadb-admin --protocol=SOCKET --socket=/run/mysqld/mysqld.sock ping --silent >/dev/null 2>&1; then
     break
   fi
   sleep 1
@@ -55,7 +58,7 @@ for i in {1..60}; do
   fi
 done
 
-mariadb --socket=/run/mysqld/mysqld.sock -uroot <<SQL
+mariadb --protocol=SOCKET --socket=/run/mysqld/mysqld.sock -uroot <<SQL
 CREATE DATABASE IF NOT EXISTS \`${MYSQL_DATABASE}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE USER IF NOT EXISTS '${MYSQL_USER}'@'127.0.0.1' IDENTIFIED BY '${MYSQL_PASSWORD}';
 CREATE USER IF NOT EXISTS '${MYSQL_USER}'@'localhost' IDENTIFIED BY '${MYSQL_PASSWORD}';
