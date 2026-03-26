@@ -3,13 +3,9 @@ services:
     name: dodgeai-backend
     runtime: docker
     rootDir: backend
-    plan: starter
+    plan: free
     autoDeploy: true
     healthCheckPath: /health
-    disk:
-      name: dodgeai-data
-      mountPath: /var/data
-      sizeGB: 5
     envVars:
       - key: PORT
         value: 8000
@@ -18,9 +14,31 @@ services:
       - key: APP_PORT
         value: 8000
       - key: CORS_ORIGINS
-        value: https://your-vercel-project.vercel.app
+        value: https://dodgeaiassgn.vercel.app
+      - key: MAX_UPLOAD_MB
+        value: 100
       - key: UPLOAD_DIR
-        value: /var/data/uploads
+        value: /tmp/uploads
+      - key: OVERLAP_THRESHOLD
+        value: 0.30
+      - key: CONFIDENCE_THRESHOLD
+        value: 0.60
+      - key: BORDERLINE_LOW
+        value: 0.40
+      - key: BORDERLINE_HIGH
+        value: 0.60
+      - key: MIN_NAME_SIMILARITY
+        value: 0.65
+      - key: MIN_INTERSECTION_SIZE
+        value: 5
+      - key: MIN_DISTINCT_VALUES
+        value: 8
+      - key: MAX_RELATIONSHIPS_PER_TABLE_PAIR
+        value: 8
+      - key: MYSQL_DATA_DIR
+        value: /tmp/mysql
+      - key: RATE_LIMIT_UPLOADS_PER_MINUTE
+        value: 10
       - key: MYSQL_HOST
         value: 127.0.0.1
       - key: MYSQL_PORT
@@ -34,7 +52,7 @@ services:
       - key: NEO4J_URI
         sync: false
       - key: NEO4J_USER
-        value: neo4j
+        sync: false
       - key: NEO4J_PASSWORD
         sync: false
       - key: GROQ_API_KEY
