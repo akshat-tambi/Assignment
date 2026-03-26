@@ -21,6 +21,104 @@ from app.services.job_store import JobStore
 
 logger = logging.getLogger(__name__)
 
+_METRIC_TOKENS = {
+    "amount",
+    "net",
+    "total",
+    "currency",
+    "price",
+    "tax",
+    "quantity",
+    "rate",
+    "gross",
+    "cost",
+    "value",
+}
+
+_IDENTIFIER_TOKENS = {
+    "id",
+    "document",
+    "order",
+    "customer",
+    "partner",
+    "account",
+    "product",
+    "material",
+    "delivery",
+    "billing",
+    "sales",
+    "item",
+    "line",
+    "number",
+    "code",
+    "key",
+}
+
+
+def _normalize_col_name(value: str | None) -> str:
+    return (value or "").strip().lower().replace("_", "")
+
+
+def _has_metric_semantics(column_name: str | None) -> bool:
+    normalized = _normalize_col_name(column_name)
+    return any(token in normalized for token in _METRIC_TOKENS)
+
+
+def _has_identifier_semantics(column_name: str | None) -> bool:
+    normalized = _normalize_col_name(column_name)
+    return any(token in normalized for token in _IDENTIFIER_TOKENS)
+
+
+def _is_metric_only_relation(rel: dict[str, Any]) -> bool:
+    source_column = rel.get("source_column") or rel.get("column_a")
+    target_column = rel.get("target_column") or rel.get("column_b")
+
+    if not (_has_metric_semantics(source_column) and _has_metric_semantics(target_column)):
+        return False
+
+    # If either side clearly looks like an identifier, keep it for normal scoring.
+    if _has_identifier_semantics(source_column) or _has_identifier_semantics(target_column):
+        return False
+
+    return True
+
+
+def _apply_quality_guardrails(
+    relationships: list[dict[str, Any]],
+    *,
+    min_score: float = 0.70,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    kept: list[dict[str, Any]] = []
+    rejected: list[dict[str, Any]] = []
+
+    for rel in relationships:
+        score = float(rel.get("score", 0.0) or 0.0)
+        llm_metric_only = bool(rel.get("llm_metric_only", False))
+        suspicious_tags = {str(t).strip().lower() for t in rel.get("llm_suspicious_tags", []) if t}
+        metric_only_by_name = _is_metric_only_relation(rel)
+
+        if score < min_score:
+            rel["decision"] = "rejected"
+            rel["reason"] = "guardrail_weak_score"
+            rejected.append(rel)
+            continue
+
+        if llm_metric_only or metric_only_by_name:
+            rel["decision"] = "rejected"
+            rel["reason"] = "guardrail_metric_only"
+            rejected.append(rel)
+            continue
+
+        if {"semantic_mismatch", "value_coincidence", "wrong_direction"} & suspicious_tags:
+            rel["decision"] = "rejected"
+            rel["reason"] = "guardrail_llm_suspicious"
+            rejected.append(rel)
+            continue
+
+        kept.append(rel)
+
+    return kept, rejected
+
 
 def _validate_extracted_structure(root: Path) -> None:
     folders = [p for p in root.iterdir() if p.is_dir()]
@@ -157,11 +255,15 @@ async def process_upload_job(
         llm_rejected = [r for r in verified_inferred if r.get("decision") == "rejected"]
         rejected.extend(llm_rejected)
         borderline = [r for r in verified_inferred if r.get("decision") == "borderline"]
+
+        accepted, guardrail_rejected = _apply_quality_guardrails(accepted, min_score=0.70)
+        rejected.extend(guardrail_rejected)
         logger.info(
-            "pipeline llm_refinement job_id=%s verified_total=%s accepted_after_verify=%s rejected_after_verify=%s",
+            "pipeline llm_refinement job_id=%s verified_total=%s accepted_after_verify=%s guardrail_rejected=%s rejected_after_verify=%s",
             job_id,
             len(verified_inferred),
             len(accepted),
+            len(guardrail_rejected),
             len(llm_rejected),
         )
 
