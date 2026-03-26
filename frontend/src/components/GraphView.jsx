@@ -303,30 +303,30 @@ export default function GraphView({ graph, selectedNode, onSelectNode }) {
       const isNeighbor = selectedNeighbors.has(node);
       if (isSelected) {
         sigmaGraph.mergeNodeAttributes(node, {
-          color: '#111827',
+          color: attrs.baseColor || attrs.color,
           size: Math.max(2.8, (attrs.baseSize || attrs.size) * 3.2),
           hidden: false,
           zIndex: 20,
         });
       } else if (isLinkFocusNode) {
         sigmaGraph.mergeNodeAttributes(node, {
-          color: '#1e3a8a',
+          color: attrs.baseColor || attrs.color,
           size: Math.max(2.0, (attrs.baseSize || attrs.size) * 2.2),
           hidden: false,
           zIndex: 18,
         });
       } else if (isNeighbor) {
         sigmaGraph.mergeNodeAttributes(node, {
-          color: '#1d4ed8',
+          color: attrs.baseColor || attrs.color,
           size: Math.max(1.4, (attrs.baseSize || attrs.size) * 1.8),
           hidden: false,
           zIndex: 15,
         });
       } else {
         sigmaGraph.mergeNodeAttributes(node, {
-          color: '#e5e7eb',
+          color: attrs.baseColor || attrs.color,
           size: Math.max(0.35, (attrs.baseSize || attrs.size) * 0.5),
-          hidden: false,
+          hidden: true,
           zIndex: 0,
         });
       }
@@ -346,14 +346,14 @@ export default function GraphView({ graph, selectedNode, onSelectNode }) {
       const isSelectedEdge = selectedEdges.has(edge);
       if (isSelectedEdge) {
         sigmaGraph.mergeEdgeAttributes(edge, {
-          color: '#1d4ed8',
+          color: attrs.baseColor || attrs.color,
           size: Math.max(2.6, (attrs.baseSize || attrs.size) * 3.3),
           hidden: false,
           zIndex: 25,
         });
       } else {
         sigmaGraph.mergeEdgeAttributes(edge, {
-          color: '#f1f5f9',
+          color: attrs.baseColor || attrs.color,
           size: Math.max(0.1, (attrs.baseSize || attrs.size) * 0.2),
           hidden: true,
           zIndex: 0,
